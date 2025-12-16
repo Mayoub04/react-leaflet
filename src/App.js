@@ -10,7 +10,7 @@ const customIcon = new Icon({
   iconSize: [38, 38]
 });
 
-const createClusterCustomIcon = function (cluster) {
+const createClusterCustomIcon = (cluster) => {
   return new divIcon({
     html: `<span class="cluster-icon">${cluster.getChildCount()}</span>`,
     className: "custom-marker-cluster",
@@ -18,23 +18,39 @@ const createClusterCustomIcon = function (cluster) {
   });
 };
 
-const markers = [
-  { geocode: { lat: 48.858370, lng: 2.294481 } }, 
-  { geocode: { lat: 48.873792, lng: 2.295028 } }, 
-  { geocode: { lat: 48.864824, lng: 2.334595 } }  
-];
-
-const API = "https://astro-app.wittymeadow-6c5bafb4.westeurope.azurecontainerapps.io/conjunction";
+const SPOTS_API = "https://app-hilal-api.azurewebsites.net/api/spots";
+const CONJUNCTION_API = "https://astro-app.wittymeadow-6c5bafb4.westeurope.azurecontainerapps.io/conjunction";
 
 function App() {
-  const [data, setData] = useState([]);
+  const [spots, setSpots] = useState([]);
+  const [conjunction, setConjunction] = useState([]);
 
+  
   useEffect(() => {
-    const Api = async () => {
+    const Spots = async () => {
       try {
-        const res = await Promise.all(
-          markers.map((m) =>
-            fetch(API, {
+        const res = await fetch(SPOTS_API);
+        const data = await res.json();
+
+        console.log("Spots API :", data);
+        setSpots(data);
+      } catch (error) {
+        console.error("Erreur chargement spots :", error);
+      }
+    };
+
+    Spots();
+  }, []);
+
+  
+  useEffect(() => {
+    if (spots.length === 0) return;
+
+    const Conjunctions = async () => {
+      try {
+        const responses = await Promise.all(
+          spots.map((spot) =>
+            fetch(CONJUNCTION_API, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -42,8 +58,8 @@ function App() {
                 start_month: 1,
                 end_year: 2025,
                 end_month: 2,
-                obs_lat: m.geocode.lat,
-                obs_lon: m.geocode.lng,
+                obs_lat: spot.latitude,
+                obs_lon: spot.longitude,
                 obs_elev: 105,
                 temperature_c: 10,
                 pressure_mbar: 1010,
@@ -54,19 +70,22 @@ function App() {
           )
         );
 
-        console.log("Réponse API :", res);
-        setData(res);
-
+        console.log("Conjunction API :", responses);
+        setConjunction(responses);
       } catch (error) {
-        console.error("Erreur API :", error);
+        console.error("Erreur des chargmements des conjonctions :", error);
       }
     };
 
-    Api();
-  }, []);
+    Conjunctions();
+  }, [spots]);
 
   return (
-    <MapContainer center={[48.8566, 2.3522]} zoom={13}>
+    <MapContainer
+      center={[49.0, 1.7]}
+      zoom={8}
+      style={{ height: "100vh", width: "100%" }}
+    >
       <TileLayer
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -76,24 +95,22 @@ function App() {
         chunkedLoading
         iconCreateFunction={createClusterCustomIcon}
       >
-
-        {markers.map((marker, index) => (
+        {spots.map((spot, index) => (
           <Marker
-            key={index}
-            position={[marker.geocode.lat, marker.geocode.lng]}
+            key={spot.id}
+            position={[spot.latitude, spot.longitude]}
             icon={customIcon}
           >
-            <Tooltip 
-              direction="top" 
-              offset={[0, -20]} 
-              opacity={1} 
-              sticky
-            >
-              <pre>{JSON.stringify(data[index], null, 2)}</pre>
+            <Tooltip direction="top" offset={[0, -20]} opacity={1} sticky>
+              <div style={{ maxWidth: "300px" }}>
+                <strong>{spot.city} ({spot.zipCode})</strong>
+                <pre style={{ whiteSpace: "pre-wrap" }}>
+                  {JSON.stringify(conjunction[index], null, 2)}
+                </pre>
+              </div>
             </Tooltip>
           </Marker>
         ))}
-
       </MarkerClusterGroup>
     </MapContainer>
   );
